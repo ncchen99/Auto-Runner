@@ -2,6 +2,7 @@ package com.example.autorunner
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
@@ -24,16 +25,13 @@ import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
-import java.util.Timer
-import java.util.TimerTask
+
 
 class MainActivity : ComponentActivity(), OnMapReadyCallback {
     private lateinit var mapView: MapView
     private lateinit var googleMap: GoogleMap
     private val fusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
     private val initialLocation = LatLng(25.0330, 121.5654) // 台北101初始位置
-    private var latitudeOffset = 0.0 // 緯度增量
-    private var longitudeOffset = 0.0 // 經度增量
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,11 +49,11 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
             }
         }
 
-        // 如果權限被授予，則在 onMapReady 中初始化位置顯示
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
+        // 啟動位置模擬服務
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            startService(Intent(this, MockLocationService::class.java))
         } else {
-            startMockLocationUpdates() // 啟動模擬位置更新
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
         }
     }
 
@@ -82,36 +80,6 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private fun startMockLocationUpdates() {
-        fusedLocationClient.setMockMode(true) // 啟用 Mock 模式
-
-        val timer = Timer()
-        timer.scheduleAtFixedRate(object : TimerTask() {
-            override fun run() {
-                // 模擬位置的增量變化
-                latitudeOffset += 0.0001
-                longitudeOffset += 0.0001
-
-                val mockLocation = Location("mockProvider").apply {
-                    latitude = initialLocation.latitude + latitudeOffset
-                    longitude = initialLocation.longitude + longitudeOffset
-                    accuracy = 1.0f
-                    time = System.currentTimeMillis()
-                }
-
-                // 更新模擬位置
-                fusedLocationClient.setMockLocation(mockLocation).addOnSuccessListener {
-                    runOnUiThread {
-                        val newLocation = LatLng(mockLocation.latitude, mockLocation.longitude)
-                        googleMap.clear() // 清除地圖標記
-                        googleMap.addMarker(MarkerOptions().position(newLocation).title("模擬位置"))
-                        googleMap.moveCamera(CameraUpdateFactory.newLatLng(newLocation))
-                    }
-                }
-            }
-        }, 0, 2000) // 每2秒更新一次位置
-    }
 
     override fun onResume() {
         super.onResume()
@@ -125,18 +93,8 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopService(Intent(this, MockLocationService::class.java)) // 停止位置模擬服務
         mapView.onDestroy()
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-        fusedLocationClient.setMockMode(false) // 停止 Mock 模式
     }
 }
 

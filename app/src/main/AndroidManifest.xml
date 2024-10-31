@@ -30,6 +30,8 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyATD0wSoa21PDE21D0tS1T8jQ0gR_4qymY" /> <!-- 在此處填入你的API Key -->
+        <service android:name=".MockLocationService" android:enabled="true" android:exported="false" />
+
     </application>
 
 </manifest>
