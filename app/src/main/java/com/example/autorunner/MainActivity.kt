@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.example.autorunner.ui.theme.AutoRunnerTheme
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -50,13 +51,35 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
             }
         }
 
-        startMockLocationUpdates() // 啟動模擬位置更新
+        // 如果權限被授予，則在 onMapReady 中初始化位置顯示
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
+        } else {
+            startMockLocationUpdates() // 啟動模擬位置更新
+        }
     }
+
 
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
         googleMap.addMarker(MarkerOptions().position(initialLocation).title("起始位置"))
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(initialLocation, 15f))
+
+        enableUserLocation() // 在 onMapReady 中呼叫
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun enableUserLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            googleMap.isMyLocationEnabled = true
+            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                location?.let {
+                    val userLocation = LatLng(it.latitude, it.longitude)
+                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(userLocation, 15f))
+                    googleMap.addMarker(MarkerOptions().position(userLocation).title("當前位置"))
+                }
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -111,13 +134,6 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
             return
         }
         fusedLocationClient.setMockMode(false) // 停止 Mock 模式
