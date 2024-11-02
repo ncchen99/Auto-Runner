@@ -4,7 +4,7 @@
 
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" tools:ignore="MockLocation" />
+    <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" tools:ignore="ProtectedPermissions" />
 
     <application
         android:allowBackup="true"
@@ -29,7 +29,8 @@
         </activity>
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyATD0wSoa21PDE21D0tS1T8jQ0gR_4qymY" /> <!-- 在此處填入你的API Key -->
+            android:value="${GOOGLE_MAPS_API_KEY}" /> <!-- 在此處填入你的API Key -->
+
         <service android:name=".MockLocationService" android:enabled="true" android:exported="false" />
 
     </application>
