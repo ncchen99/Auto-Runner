@@ -11,7 +11,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -43,20 +45,40 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
 
         setContent {
             AutoRunnerTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                Scaffold(
+                    floatingActionButton = {
+                    FloatingActionButton(onClick = { toggleMockLocationService() }) {
+                        Text("Start/Stop")
+                    }
+                }) { innerPadding ->
                     MapScreen(mapView = mapView, modifier = Modifier.padding(innerPadding))
                 }
             }
         }
 
+
+    }
+
+
+    private fun toggleMockLocationService() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            startService(Intent(this, MockLocationService::class.java))
+            val intent = Intent(this, MockLocationService::class.java)
+            if (isMockServiceRunning) {
+                stopService(intent)
+            } else {
+                startForegroundService(intent)
+            }
+            isMockServiceRunning = !isMockServiceRunning
             setupLocationUpdates() // 設置位置更新回呼
         } else {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
         }
+
     }
 
+    companion object {
+        var isMockServiceRunning = false
+    }
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(25.0330, 121.5654), 15f))

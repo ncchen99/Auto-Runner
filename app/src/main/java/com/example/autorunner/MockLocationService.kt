@@ -10,6 +10,12 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.LatLng
 import java.util.Timer
 import java.util.TimerTask
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Build
+import androidx.core.app.NotificationCompat
 
 class MockLocationService : Service() {
 
@@ -20,10 +26,50 @@ class MockLocationService : Service() {
     private val timer = Timer()
     private var nanoOffset: Long = 0
 
+
+    override fun onCreate() {
+        super.onCreate()
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "模擬位置服務",
+            NotificationManager.IMPORTANCE_LOW
+        )
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 設置前景通知
+        val notification = Notification.Builder(this, CHANNEL_ID)
+            .setContentTitle("模擬位置服務")
+            .setContentText("位置模擬中...")
+            .setSmallIcon(R.drawable.ic_launcher_foreground) // 替換成您自己的圖標
+            .build()
+
+        startForeground(1, notification)
+
         initNanoOffset() // 計算 nanoOffset
         startMockLocationUpdates()
         return START_STICKY
+    }
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Mock Location Service",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Location Simulation Running")
+            .setContentText("Simulating user location in the background.")
+            .setSmallIcon(R.drawable.ic_launcher_foreground) // Replace with an actual icon resource
+            .build()
     }
 
     // 計算 elapsedRealtimeNanos 與 System.nanoTime() 之間的 offset
@@ -72,5 +118,11 @@ class MockLocationService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
+    }
+
+    // Constant values
+    companion object {
+        private const val CHANNEL_ID = "MockLocationServiceChannel"
+        private const val NOTIFICATION_ID = 1
     }
 }
