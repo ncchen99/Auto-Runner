@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
     private lateinit var mapView: MapView
     private lateinit var googleMap: GoogleMap
     private val locationList = mutableListOf<LatLng>() // 儲存使用者新增的地點
-    private var travelSpeed = 50.0 // 初始行駛時速
+    private var travelSpeed = 10.0 // 初始行駛時速
     private var isMockServiceRunning = false
     private val fusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
     private lateinit var locationCallback: LocationCallback
@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
 
         setContent {
             AutoRunnerTheme {
-                var speedInput by remember { mutableStateOf("50") }
+                var speedInput by remember { mutableStateOf("10") }
                 val context = LocalContext.current
 
                 Scaffold(
@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
 
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(25.0330, 121.5654), 15f))
+        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(22.9967197, 120.2232919), 15f))
         enableUserLocation()
 
         // 地圖點擊以新增地點

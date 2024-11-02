@@ -16,11 +16,12 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import android.media.MediaPlayer
 
 class MockLocationService : Service() {
 
     private val fusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
-    private var currentLocation = LatLng(25.0330, 121.5654) // 台北101初始位置
+    private var currentLocation = LatLng(22.9967197, 120.2232919) // 自強校區初始位置 ,
     private var latitudeOffset = 0.0001
     private var longitudeOffset = 0.0001
     private val timer = Timer()
@@ -29,7 +30,9 @@ class MockLocationService : Service() {
 
     private var locationList = listOf<LatLng>()
     private var currentIndex = 0
-    private var speed = 50.0 // 默認行駛時速 (公里/小時)
+    private var speed = 10.0 // 默認行駛時速 (公里/小時)
+
+    private var mediaPlayer: MediaPlayer? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -40,12 +43,14 @@ class MockLocationService : Service() {
         )
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
+        createNotificationChannel()
+        mediaPlayer = MediaPlayer.create(this, R.raw.notification_sound) // 確保有一個名為 notification_sound 的音效文件
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 
         locationList = intent?.getParcelableArrayListExtra("locationList") ?: emptyList()
-        speed = intent?.getDoubleExtra("speed", 50.0) ?: 50.0
+        speed = intent?.getDoubleExtra("speed", 10.0) ?: 10.0
 
         Log.d("onStartCommand", "locationList: $locationList")
         Log.d("onStartCommand", "speed: $speed")
@@ -109,17 +114,19 @@ class MockLocationService : Service() {
                         results
                     )
                     val distance = results[0]
-                    Log.d("distance", "distance: $distance")
 
                     // 計算每秒需要行走的距離
                     val distancePerSecond = (speed * 1000) / 3600
-                    Log.d("distancePerSecond", "distancePerSecond: $distancePerSecond")
 
-                    // 如果距離小於每秒行走距離，則移動到下一個地點
+                    // 如果累積比例超過或等於 1，則移動到下一個地點
                     if (fractionSum >= 1) {
                         currentIndex++
                         currentLocation = endLocation
                         fractionSum = 0.0
+
+                        // 播放提示音並暫停 20 秒
+                        mediaPlayer?.start()
+                        Thread.sleep(20000)
                     } else {
                         // 計算新的位置
                         val fraction = distancePerSecond / distance
@@ -151,6 +158,7 @@ class MockLocationService : Service() {
         super.onDestroy()
         fusedLocationClient.setMockMode(false)
         timer.cancel()
+        mediaPlayer?.release()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
