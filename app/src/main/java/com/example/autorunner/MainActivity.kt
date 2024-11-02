@@ -2,23 +2,24 @@ package com.example.autorunner
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.example.autorunner.ui.theme.AutoRunnerTheme
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -31,8 +32,10 @@ import com.google.android.gms.maps.model.MarkerOptions
 class MainActivity : ComponentActivity(), OnMapReadyCallback {
     private lateinit var mapView: MapView
     private lateinit var googleMap: GoogleMap
+    private val locationList = mutableListOf<LatLng>() // 儲存使用者新增的地點
+    private var travelSpeed = 50.0 // 初始行駛時速
+    private var isMockServiceRunning = false
     private val fusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
-
     private lateinit var locationCallback: LocationCallback
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,50 +48,45 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
 
         setContent {
             AutoRunnerTheme {
+                var speedInput by remember { mutableStateOf("50") }
+                val context = LocalContext.current
+
                 Scaffold(
                     floatingActionButton = {
-                    FloatingActionButton(onClick = { toggleMockLocationService() }) {
-                        Text("Start/Stop")
+                        FloatingActionButton(onClick = {
+                            if (isMockServiceRunning) {
+                                stopMockService()
+                            } else {
+                                startMockService(context, speedInput.toDoubleOrNull())
+                            }
+                        }) {
+                            Text(if (isMockServiceRunning) "Stop" else "Start")
+                        }
                     }
-                }) { innerPadding ->
-                    MapScreen(mapView = mapView, modifier = Modifier.padding(innerPadding))
+                ) { innerPadding ->
+                    MapScreen(
+                        mapView = mapView,
+                        modifier = Modifier.padding(innerPadding),
+                        speedInput = speedInput,
+                        onSpeedChange = { speedInput = it }
+                    )
                 }
             }
         }
-
-
     }
 
-
-    private fun toggleMockLocationService() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            val intent = Intent(this, MockLocationService::class.java)
-            if (isMockServiceRunning) {
-                stopService(intent)
-            } else {
-                startForegroundService(intent)
+    private fun startMockService(context: Context, speed: Double?) {
+        if (speed != null && speed > 0) {
+            travelSpeed = speed
+            val intent = Intent(this, MockLocationService::class.java).apply {
+                putExtra("locationList", ArrayList(locationList))
+                putExtra("speed", travelSpeed)
             }
-            isMockServiceRunning = !isMockServiceRunning
+            startForegroundService(intent)
+            isMockServiceRunning = true
             setupLocationUpdates() // 設置位置更新回呼
         } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
-        }
-
-    }
-
-    companion object {
-        var isMockServiceRunning = false
-    }
-    override fun onMapReady(map: GoogleMap) {
-        googleMap = map
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(25.0330, 121.5654), 15f))
-        enableUserLocation()
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun enableUserLocation() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            googleMap.isMyLocationEnabled = true
+            Toast.makeText(context, "請輸入有效的時速", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -112,12 +110,30 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
     }
 
-
-    override fun onDestroy() {
-        super.onDestroy()
+    private fun stopMockService() {
         stopService(Intent(this, MockLocationService::class.java))
-        fusedLocationClient.removeLocationUpdates(locationCallback) // 停止位置更新
-        mapView.onDestroy()
+        isMockServiceRunning = false
+    }
+
+    override fun onMapReady(map: GoogleMap) {
+        googleMap = map
+        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(25.0330, 121.5654), 15f))
+        enableUserLocation()
+
+        // 地圖點擊以新增地點
+        googleMap.setOnMapClickListener { latLng ->
+            locationList.add(latLng)
+            googleMap.addMarker(MarkerOptions().position(latLng).title("地點 ${locationList.size}"))
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun enableUserLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            googleMap.isMyLocationEnabled = true
+        } else {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
+        }
     }
 
     override fun onResume() {
@@ -129,9 +145,25 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         super.onPause()
         mapView.onPause()
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopMockService()
+        mapView.onDestroy()
+    }
 }
 
 @Composable
-fun MapScreen(mapView: MapView, modifier: Modifier = Modifier) {
+fun MapScreen(
+    mapView: MapView,
+    modifier: Modifier = Modifier,
+    speedInput: String,
+    onSpeedChange: (String) -> Unit
+) {
     AndroidView(factory = { mapView }, modifier = modifier)
+    TextField(
+        value = speedInput,
+        onValueChange = onSpeedChange,
+        label = { Text("行駛時速 (公里)") }
+    )
 }

@@ -25,7 +25,11 @@ class MockLocationService : Service() {
     private var longitudeOffset = 0.0001
     private val timer = Timer()
     private var nanoOffset: Long = 0
+    private var fractionSum = 0.0
 
+    private var locationList = listOf<LatLng>()
+    private var currentIndex = 0
+    private var speed = 50.0 // 默認行駛時速 (公里/小時)
 
     override fun onCreate() {
         super.onCreate()
@@ -39,6 +43,12 @@ class MockLocationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+        locationList = intent?.getParcelableArrayListExtra("locationList") ?: emptyList()
+        speed = intent?.getDoubleExtra("speed", 50.0) ?: 50.0
+
+        Log.d("onStartCommand", "locationList: $locationList")
+        Log.d("onStartCommand", "speed: $speed")
         // 設置前景通知
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("模擬位置服務")
@@ -53,15 +63,14 @@ class MockLocationService : Service() {
         return START_STICKY
     }
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Mock Location Service",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Mock Location Service",
+            NotificationManager.IMPORTANCE_LOW
+        )
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+
     }
 
     private fun createNotification(): Notification {
@@ -88,10 +97,38 @@ class MockLocationService : Service() {
 
         timer.schedule(object : TimerTask() {
             override fun run() {
-                currentLocation = LatLng(
-                    currentLocation.latitude + latitudeOffset,
-                    currentLocation.longitude + longitudeOffset
-                )
+                if (currentIndex < locationList.size - 1) {
+                    val startLocation = locationList[currentIndex]
+                    val endLocation = locationList[currentIndex + 1]
+
+                    // 計算兩點之間的距離
+                    val results = FloatArray(1)
+                    Location.distanceBetween(
+                        startLocation.latitude, startLocation.longitude,
+                        endLocation.latitude, endLocation.longitude,
+                        results
+                    )
+                    val distance = results[0]
+                    Log.d("distance", "distance: $distance")
+
+                    // 計算每秒需要行走的距離
+                    val distancePerSecond = (speed * 1000) / 3600
+                    Log.d("distancePerSecond", "distancePerSecond: $distancePerSecond")
+
+                    // 如果距離小於每秒行走距離，則移動到下一個地點
+                    if (fractionSum >= 1) {
+                        currentIndex++
+                        currentLocation = endLocation
+                        fractionSum = 0.0
+                    } else {
+                        // 計算新的位置
+                        val fraction = distancePerSecond / distance
+                        fractionSum += fraction
+                        val newLatitude = startLocation.latitude + fractionSum * (endLocation.latitude - startLocation.latitude)
+                        val newLongitude = startLocation.longitude + fractionSum * (endLocation.longitude - startLocation.longitude)
+                        currentLocation = LatLng(newLatitude, newLongitude)
+                    }
+                }
 
                 val mockLocation = Location("mockProvider").apply {
                     latitude = currentLocation.latitude
@@ -106,7 +143,7 @@ class MockLocationService : Service() {
                     .addOnSuccessListener { Log.d("setMockLocation", "Location mocked at ${mockLocation.latitude}, ${mockLocation.longitude}") }
                     .addOnFailureListener { Log.d("setMockLocation", "Mocking failed") }
             }
-        }, 0, 1100) // 每 1100 毫秒更新一次位置
+        }, 0, 1000) // 每秒更新一次位置
     }
 
     @SuppressLint("MissingPermission")
