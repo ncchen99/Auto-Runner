@@ -19,6 +19,12 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
         onCreate(db)
     }
 
+    fun deleteLandmark(latitude: Double, longitude: Double) {
+        val db = writableDatabase
+        db.delete(TABLE_NAME, "$COLUMN_LATITUDE = ? AND $COLUMN_LONGITUDE = ?", arrayOf(latitude.toString(), longitude.toString()))
+        db.close()
+    }
+
     companion object {
         private const val DATABASE_NAME = "landmarks.db"
         private const val DATABASE_VERSION = 1

@@ -12,10 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,14 +32,11 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
     private lateinit var googleMap: GoogleMap
     private val locationList = mutableListOf<LatLng>() // 儲存使用者新增的地點
     private var travelSpeed = 10.0 // 初始行駛時速
-    private var isMockServiceRunning = false
     private val fusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
     private lateinit var locationCallback: LocationCallback
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-//        setContentView(R.layout.activity_main)
-
 
         enableEdgeToEdge()
 
@@ -53,6 +47,8 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         setContent {
             AutoRunnerTheme {
                 var speedInput by remember { mutableStateOf("10") }
+                var isMockServiceRunning by remember { mutableStateOf(false) }
+                var showDialog by remember { mutableStateOf(false) }
                 val context = LocalContext.current
 
                 Scaffold(
@@ -60,8 +56,9 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
                         FloatingActionButton(onClick = {
                             if (isMockServiceRunning) {
                                 stopMockService()
+                                isMockServiceRunning = false
                             } else {
-                                startMockService(context, speedInput.toDoubleOrNull())
+                                showDialog = true
                             }
                         }) {
                             Text(if (isMockServiceRunning) "Stop" else "Start")
@@ -70,10 +67,36 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
                 ) { innerPadding ->
                     MapScreen(
                         mapView = mapView,
-                        modifier = Modifier.padding(innerPadding),
-                        speedInput = speedInput,
-                        onSpeedChange = { speedInput = it }
+                        modifier = Modifier.padding(innerPadding)
                     )
+
+                    if (showDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showDialog = false },
+                            title = { Text("設定行駛時速") },
+                            text = {
+                                TextField(
+                                    value = speedInput,
+                                    onValueChange = { speedInput = it },
+                                    label = { Text("行駛時速 (公里)") }
+                                )
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    startMockService(context, speedInput.toDoubleOrNull())
+                                    isMockServiceRunning = true
+                                    showDialog = false
+                                }) {
+                                    Text("確認")
+                                }
+                            },
+                            dismissButton = {
+                                Button(onClick = { showDialog = false }) {
+                                    Text("取消")
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -87,7 +110,6 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
                 putExtra("speed", travelSpeed)
             }
             startForegroundService(intent)
-            isMockServiceRunning = true
             setupLocationUpdates() // 設置位置更新回呼
         } else {
             Toast.makeText(context, "請輸入有效的時速", Toast.LENGTH_SHORT).show()
@@ -116,7 +138,6 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
 
     private fun stopMockService() {
         stopService(Intent(this, MockLocationService::class.java))
-        isMockServiceRunning = false
     }
 
     override fun onMapReady(map: GoogleMap) {
@@ -223,14 +244,7 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
 @Composable
 fun MapScreen(
     mapView: MapView,
-    modifier: Modifier = Modifier,
-    speedInput: String,
-    onSpeedChange: (String) -> Unit
+    modifier: Modifier = Modifier
 ) {
     AndroidView(factory = { mapView }, modifier = modifier)
-    TextField(
-        value = speedInput,
-        onValueChange = onSpeedChange,
-        label = { Text("行駛時速 (公里)") }
-    )
 }
