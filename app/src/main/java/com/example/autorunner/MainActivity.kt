@@ -2,6 +2,7 @@ package com.example.autorunner
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -40,6 +41,12 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+//        setContentView(R.layout.activity_main)
+
+        // 讀取地標資料
+        val landmarks = getLandmarks()
+        // 使用 landmarks 進行初始化或其他操作
+
         enableEdgeToEdge()
 
         mapView = MapView(this)
@@ -120,10 +127,18 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(22.9967197, 120.2232919), 15f))
         enableUserLocation()
 
+        // 載入並顯示已保存的地標
+        val landmarks = getLandmarks()
+        for (landmark in landmarks) {
+            locationList.add(landmark)
+            googleMap.addMarker(MarkerOptions().position(landmark).title("已保存地點"))
+        }
+
         // 地圖點擊以新增地點
         googleMap.setOnMapClickListener { latLng ->
             locationList.add(latLng)
             googleMap.addMarker(MarkerOptions().position(latLng).title("地點 ${locationList.size}"))
+            insertLandmark(latLng.latitude, latLng.longitude) // 保存新地點到資料庫
         }
     }
 
@@ -150,6 +165,42 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         super.onDestroy()
         stopMockService()
         mapView.onDestroy()
+    }
+
+    fun insertLandmark(latitude: Double, longitude: Double) {
+        val dbHelper = DatabaseHelper(this)
+        val db = dbHelper.writableDatabase
+
+        val values = ContentValues().apply {
+            put(DatabaseHelper.COLUMN_LATITUDE, latitude)
+            put(DatabaseHelper.COLUMN_LONGITUDE, longitude)
+        }
+
+        db.insert(DatabaseHelper.TABLE_NAME, null, values)
+        db.close()
+    }
+
+    private fun getLandmarks(): List<LatLng> {
+        val dbHelper = DatabaseHelper(this)
+        val db = dbHelper.readableDatabase
+
+        val cursor = db.query(
+            DatabaseHelper.TABLE_NAME,
+            arrayOf(DatabaseHelper.COLUMN_LATITUDE, DatabaseHelper.COLUMN_LONGITUDE),
+            null, null, null, null, null
+        )
+
+        val landmarks = mutableListOf<LatLng>()
+        with(cursor) {
+            while (moveToNext()) {
+                val latitude = getDouble(getColumnIndexOrThrow(DatabaseHelper.COLUMN_LATITUDE))
+                val longitude = getDouble(getColumnIndexOrThrow(DatabaseHelper.COLUMN_LONGITUDE))
+                landmarks.add(LatLng(latitude, longitude))
+            }
+        }
+        cursor.close()
+        db.close()
+        return landmarks
     }
 }
 
