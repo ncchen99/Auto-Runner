@@ -43,9 +43,6 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         super.onCreate(savedInstanceState)
 //        setContentView(R.layout.activity_main)
 
-        // 讀取地標資料
-        val landmarks = getLandmarks()
-        // 使用 landmarks 進行初始化或其他操作
 
         enableEdgeToEdge()
 
@@ -131,14 +128,28 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         val landmarks = getLandmarks()
         for (landmark in landmarks) {
             locationList.add(landmark)
-            googleMap.addMarker(MarkerOptions().position(landmark).title("已保存地點"))
+            val marker = googleMap.addMarker(MarkerOptions().position(landmark).title("已保存地點"))
+            marker?.tag = landmark
         }
 
         // 地圖點擊以新增地點
         googleMap.setOnMapClickListener { latLng ->
             locationList.add(latLng)
-            googleMap.addMarker(MarkerOptions().position(latLng).title("地點 ${locationList.size}"))
+            val marker = googleMap.addMarker(MarkerOptions().position(latLng).title("地點 ${locationList.size}"))
+            marker?.tag = latLng
             insertLandmark(latLng.latitude, latLng.longitude) // 保存新地點到資料庫
+        }
+
+        // 標記長按以刪除地點
+        googleMap.setOnMarkerClickListener { marker ->
+            val latLng = marker.tag as? LatLng
+            latLng?.let {
+                deleteLandmark(it.latitude, it.longitude)
+                marker.remove()
+                locationList.remove(it)
+                Toast.makeText(this, "地標已刪除", Toast.LENGTH_SHORT).show()
+            }
+            true
         }
     }
 
@@ -201,6 +212,11 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         cursor.close()
         db.close()
         return landmarks
+    }
+
+    fun deleteLandmark(latitude: Double, longitude: Double) {
+        val dbHelper = DatabaseHelper(this)
+        dbHelper.deleteLandmark(latitude, longitude)
     }
 }
 
