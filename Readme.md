@@ -62,4 +62,4 @@ AutoRunner 是一個 Android 應用程式，旨在模擬 GPS 位置更新。這�
 
 ## 授權
 
-此專案使用 [MIT License](https://github.com/ncchen99/Auto-Runner/new/master) 授權。
+此專案使用 [MIT License](LICENSE) 授權。
