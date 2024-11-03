@@ -30,7 +30,7 @@ class MockLocationService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
 
-    private var isPaused = false // 新增布林值來表示暫停狀態
+    private var isPaused = false // 新增布林值來表示暫��狀態
 
     private val binder = LocalBinder()
 
@@ -55,7 +55,7 @@ class MockLocationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 
-        locationList = intent?.getParcelableArrayListExtra("locationList") ?: emptyList()
+        locationList = intent?.getParcelableArrayListExtraCompat("locationList") ?: emptyList()
         speed = intent?.getDoubleExtra("speed", 10.0) ?: 10.0
 
         Log.d("onStartCommand", "locationList: $locationList")
@@ -173,5 +173,14 @@ class MockLocationService : Service() {
     companion object {
         private const val CHANNEL_ID = "MockLocationServiceChannel"
 //        private const val NOTIFICATION_ID = 1
+    }
+
+    private inline fun <reified T : android.os.Parcelable> Intent.getParcelableArrayListExtraCompat(key: String): ArrayList<T>? {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            extras?.getParcelableArrayList(key, T::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            extras?.getParcelableArrayList(key)
+        }
     }
 }
