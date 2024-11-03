@@ -2,11 +2,14 @@ package com.example.autorunner
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ComponentName
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.IBinder
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
+import androidx.compose.ui.unit.dp
 import com.example.autorunner.ui.theme.AutoRunnerTheme
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -26,6 +30,10 @@ import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 
 class MainActivity : ComponentActivity(), OnMapReadyCallback {
     private lateinit var mapView: MapView
@@ -34,6 +42,22 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
     private var travelSpeed = 10.0 // 初始行駛時速
     private val fusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
     private lateinit var locationCallback: LocationCallback
+    private var mockLocationService: MockLocationService? = null
+    private var isBound = false
+    private var isFirstStart = true // 新增變數來追蹤是否是第一次啟動
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as MockLocationService.LocalBinder
+            mockLocationService = binder.getService()
+            isBound = true
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            mockLocationService = null
+            isBound = false
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,15 +77,43 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
 
                 Scaffold(
                     floatingActionButton = {
-                        FloatingActionButton(onClick = {
-                            if (isMockServiceRunning) {
-                                stopMockService()
-                                isMockServiceRunning = false
-                            } else {
-                                showDialog = true
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+//                                .padding(horizontal = 16.dp), // 整個 Row 的水平內邊距
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            FloatingActionButton(
+                                onClick = {
+                                    stopMockService()
+                                    finish() // 結束應用程式
+                                },
+                                modifier = Modifier.padding(start = 32.dp), // 左邊按鈕的額外左邊距
+                                containerColor = Color(0xFFFFC0CB) // 淡粉色
+                            ) {
+                                Text("Stop")
                             }
-                        }) {
-                            Text(if (isMockServiceRunning) "Stop" else "Start")
+                            FloatingActionButton(
+                                onClick = {
+                                    if (isFirstStart) {
+                                        showDialog = true
+                                    } else {
+                                        if (isMockServiceRunning) {
+                                            // 傳遞暫停狀態到服務
+                                            mockLocationService?.setPaused(true)
+                                            isMockServiceRunning = false
+                                        } else {
+                                            // 恢復運行
+                                            mockLocationService?.setPaused(false)
+                                            isMockServiceRunning = true
+                                        }
+                                    }
+                                },
+//                                modifier = Modifier.padding(end = 16.dp), // 右邊按鈕的額外右邊距
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ) {
+                                Text(if (isMockServiceRunning) "Pause" else "Start")
+                            }
                         }
                     }
                 ) { innerPadding ->
@@ -85,6 +137,7 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
                                 Button(onClick = {
                                     startMockService(context, speedInput.toDoubleOrNull())
                                     isMockServiceRunning = true
+                                    isFirstStart = false // 更新狀態為非第一次啟動
                                     showDialog = false
                                 }) {
                                     Text("確認")
@@ -110,7 +163,8 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
                 putExtra("speed", travelSpeed)
             }
             startForegroundService(intent)
-            setupLocationUpdates() // 設置位置更新回呼
+            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+            setupLocationUpdates()
         } else {
             Toast.makeText(context, "請輸入有效的時速", Toast.LENGTH_SHORT).show()
         }
@@ -137,6 +191,10 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
     }
 
     private fun stopMockService() {
+        if (isBound) {
+            unbindService(serviceConnection)
+            isBound = false
+        }
         stopService(Intent(this, MockLocationService::class.java))
     }
 
@@ -199,7 +257,7 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         mapView.onDestroy()
     }
 
-    fun insertLandmark(latitude: Double, longitude: Double) {
+    private fun insertLandmark(latitude: Double, longitude: Double) {
         val dbHelper = DatabaseHelper(this)
         val db = dbHelper.writableDatabase
 
@@ -235,7 +293,7 @@ class MainActivity : ComponentActivity(), OnMapReadyCallback {
         return landmarks
     }
 
-    fun deleteLandmark(latitude: Double, longitude: Double) {
+    private fun deleteLandmark(latitude: Double, longitude: Double) {
         val dbHelper = DatabaseHelper(this)
         dbHelper.deleteLandmark(latitude, longitude)
     }

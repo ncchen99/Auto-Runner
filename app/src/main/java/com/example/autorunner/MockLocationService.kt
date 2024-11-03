@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Intent
 import android.location.Location
+import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 import com.google.android.gms.location.LocationServices
@@ -13,17 +14,12 @@ import java.util.TimerTask
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.Context
-import android.os.Build
-import androidx.core.app.NotificationCompat
 import android.media.MediaPlayer
 
 class MockLocationService : Service() {
 
     private val fusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
     private var currentLocation = LatLng(22.9967197, 120.2232919) // 自強校區初始位置 ,
-    private var latitudeOffset = 0.0001
-    private var longitudeOffset = 0.0001
     private val timer = Timer()
     private var nanoOffset: Long = 0
     private var fractionSum = 0.0
@@ -33,6 +29,16 @@ class MockLocationService : Service() {
     private var speed = 10.0 // 默認行駛時速 (公里/小時)
 
     private var mediaPlayer: MediaPlayer? = null
+
+    private var isPaused = false // 新增布林值來表示暫停狀態
+
+    private val binder = LocalBinder()
+
+    // 提供方法來更新暫停狀態
+    fun setPaused(paused: Boolean) {
+        Log.d("setPaused", "Paused status changed to $paused")
+        isPaused = paused
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -78,14 +84,6 @@ class MockLocationService : Service() {
 
     }
 
-    private fun createNotification(): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Location Simulation Running")
-            .setContentText("Simulating user location in the background.")
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Replace with an actual icon resource
-            .build()
-    }
-
     // 計算 elapsedRealtimeNanos 與 System.nanoTime() 之間的 offset
     @SuppressLint("MissingPermission")
     private fun initNanoOffset() {
@@ -98,10 +96,12 @@ class MockLocationService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun startMockLocationUpdates() {
-        fusedLocationClient.setMockMode(true) // 啟用 Mock 模式
+        fusedLocationClient.setMockMode(true)
 
         timer.schedule(object : TimerTask() {
             override fun run() {
+                if (isPaused) return // 如果是暫停狀態，則不執行任何動作
+
                 if (currentIndex < locationList.size - 1) {
                     val startLocation = locationList[currentIndex]
                     val endLocation = locationList[currentIndex + 1]
@@ -161,13 +161,17 @@ class MockLocationService : Service() {
         mediaPlayer?.release()
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
+    override fun onBind(intent: Intent?): IBinder {
+        return binder
+    }
+
+    inner class LocalBinder : Binder() {
+        fun getService(): MockLocationService = this@MockLocationService
     }
 
     // Constant values
     companion object {
         private const val CHANNEL_ID = "MockLocationServiceChannel"
-        private const val NOTIFICATION_ID = 1
+//        private const val NOTIFICATION_ID = 1
     }
 }
